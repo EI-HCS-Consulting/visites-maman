@@ -594,7 +594,7 @@
 </div>
 
 <script>
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz2tzoGGC7dBieWQmXuT0BOo2Pyn3BCQJ-Eibd8HnKa7yHikT0otUvPnC4uYMCVsnNx/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxkCyQg2X5a3tYGIBfg1TjYlpiFuYwpO5vaMO-k7N5cfKFrwhuIcjIvHG7vaoA5IqVk/exec";
 const CRENEAUX = ["11h00", "13h00", "15h00", "17h00"];
 const MAX_PER_SLOT = 2;
 
@@ -642,16 +642,16 @@ function loadData() {
 }
 
 function getSlotCount(dateStr, creneau) {
-  return reservations.filter(r => r["Date"] == dateStr && r["Créneau"] == creneau).length;
+  return reservations.filter(r => normalizeDate(r["Date"]) == dateStr && r["Créneau"] == creneau).length;
 }
 
 function getNightCount(dateStr) {
-  return reservations.filter(r => r["Date"] == dateStr && r["Créneau"] == "🌙 Nuit").length;
+  return reservations.filter(r => normalizeDate(r["Date"]) == dateStr && r["Créneau"] == "🌙 Nuit").length;
 }
 
 function getNamesForSlot(dateStr, creneau) {
   return reservations
-    .filter(r => r["Date"] == dateStr && r["Créneau"] == creneau)
+    .filter(r => normalizeDate(r["Date"]) == dateStr && r["Créneau"] == creneau)
     .map(r => (r["Prénom"] || "") + " " + (r["Nom"] || "")).map(s => s.trim());
 }
 
@@ -660,6 +660,17 @@ function formatDateKey(date) {
   const m = String(date.getMonth()+1).padStart(2,'0');
   const y = date.getFullYear();
   return `${d}/${m}/${y}`;
+}
+
+function normalizeDate(val) {
+  if (!val) return '';
+  // ISO format: 2026-05-11T22:00:00.000Z → convert to local DD/MM/YYYY
+  if (typeof val === 'string' && val.includes('T')) {
+    const d = new Date(val);
+    return formatDateKey(new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()+1));
+  }
+  // Already DD/MM/YYYY
+  return String(val);
 }
 
 // Day status: 'free', 'partial', 'full', 'past'
