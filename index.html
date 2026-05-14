@@ -607,38 +607,20 @@ let today = new Date();
 today.setHours(0,0,0,0);
 
 // ========== DATA ==========
-function loadData() {
-  return new Promise((resolve) => {
-    const cbName = 'load_' + Date.now();
-    const script = document.createElement('script');
-    const timeout = setTimeout(() => {
-      delete window[cbName];
-      if (document.body.contains(script)) document.body.removeChild(script);
-      resolve();
-    }, 10000);
-
-    window[cbName] = function(json) {
-      clearTimeout(timeout);
-      delete window[cbName];
-      if (document.body.contains(script)) document.body.removeChild(script);
-      if (json.status === "ok") {
-        reservations = json.data || [];
-      }
-      resolve();
-    };
-
-    script.src = SCRIPT_URL + '?callback=' + cbName + '&t=' + Date.now();
-    script.onerror = () => {
-      clearTimeout(timeout);
-      delete window[cbName];
-      if (document.body.contains(script)) document.body.removeChild(script);
-      resolve();
-    };
-    document.body.appendChild(script);
-  }).then(() => {
-    renderCalendar();
-    if (selectedDate) renderDay();
-  });
+async function loadData() {
+  try {
+    const proxy = "https://api.allorigins.win/get?url=" + encodeURIComponent(SCRIPT_URL);
+    const r = await fetch(proxy);
+    const data = await r.json();
+    const json = JSON.parse(data.contents);
+    if (json.status === "ok") {
+      reservations = json.data || [];
+    }
+  } catch(e) {
+    console.warn("Erreur chargement:", e);
+  }
+  renderCalendar();
+  if (selectedDate) renderDay();
 }
 
 function getSlotCount(dateStr, creneau) {
@@ -912,44 +894,27 @@ async function submitReservation() {
     type: currentType
   });
 
-  // JSONP — seul moyen fiable avec Apps Script (pas de CORS)
-  await new Promise((resolve, reject) => {
-    const cbName = 'cb_' + Date.now();
-    const script = document.createElement('script');
-    const timeout = setTimeout(() => {
-      delete window[cbName];
-      document.body.removeChild(script);
-      reject(new Error('timeout'));
-    }, 10000);
+  try {
+    const proxy = "https://api.allorigins.win/get?url=" + encodeURIComponent(SCRIPT_URL + '?' + params.toString());
+    const r = await fetch(proxy);
+    const data = await r.json();
+    const json = JSON.parse(data.contents);
 
-    window[cbName] = function(data) {
-      clearTimeout(timeout);
-      delete window[cbName];
-      document.body.removeChild(script);
-      resolve(data);
-    };
-
-    script.src = SCRIPT_URL + '?' + params.toString() + '&callback=' + cbName;
-    script.onerror = () => {
-      clearTimeout(timeout);
-      delete window[cbName];
-      document.body.removeChild(script);
-      reject(new Error('script error'));
-    };
-    document.body.appendChild(script);
-  }).then(data => {
-    reservations.push({ "Date": dateStr, "Créneau": currentSlot, "Prénom": prenom, "Nom": nom });
-    renderCalendar();
-    if (selectedDate) renderDay();
-    showConfirm(prenom, nom, dateStr, currentSlot);
-  }).catch(e => {
-    // Timeout ou erreur réseau — on fait quand même l'update optimiste
-    // car Apps Script a probablement reçu la requête
-    reservations.push({ "Date": dateStr, "Créneau": currentSlot, "Prénom": prenom, "Nom": nom });
-    renderCalendar();
-    if (selectedDate) renderDay();
-    showConfirm(prenom, nom, dateStr, currentSlot);
-  });
+    if (json.status === "ok") {
+      reservations.push({ "Date": dateStr, "Créneau": currentSlot, "Prénom": prenom, "Nom": nom });
+      renderCalendar();
+      if (selectedDate) renderDay();
+      showConfirm(prenom, nom, dateStr, currentSlot);
+    } else if (json.status === "duplicate") {
+      showError("Cette réservation existe déjà.");
+    } else if (json.status === "full") {
+      showError(json.message || "Créneau complet.");
+    } else {
+      showError("Une erreur est survenue. Réessaye.");
+    }
+  } catch(e) {
+    showError("Impossible de contacter le serveur. Vérifie ta connexion.");
+  }
 
   btn.disabled = false;
   btn.textContent = '💙 Confirmer ma visite';
